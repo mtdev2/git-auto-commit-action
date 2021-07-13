@@ -14,6 +14,8 @@ setup() {
     export INPUT_COMMIT_MESSAGE="Commit Message"
     export INPUT_BRANCH="master"
     export INPUT_COMMIT_OPTIONS=""
+    export INPUT_ADD_OPTIONS=""
+    export INPUT_STATUS_OPTIONS=""
     export INPUT_FILE_PATTERN="."
     export INPUT_COMMIT_USER_NAME="Test Suite"
     export INPUT_COMMIT_USER_EMAIL="test@github.com"
@@ -22,6 +24,7 @@ setup() {
     export INPUT_PUSH_OPTIONS=""
     export INPUT_SKIP_DIRTY_CHECK=false
     export INPUT_SKIP_FETCH=false
+    export INPUT_DISABLE_GLOBBING=false
 
     # Configure Git
     if [[ -z $(git config user.name) ]]; then
@@ -114,6 +117,20 @@ git_auto_commit() {
     assert_line "::debug::Push commit to remote branch master"
 }
 
+@test "It applies INPUT_STATUS_OPTIONS when running dirty check" {
+    INPUT_STATUS_OPTIONS="--untracked-files=no"
+
+    touch "${FAKE_LOCAL_REPOSITORY}"/new-file-{1,2}.php
+
+    run git_auto_commit
+
+    assert_success
+
+    assert_line "INPUT_REPOSITORY value: ${INPUT_REPOSITORY}"
+    assert_line "::set-output name=changes_detected::false"
+    assert_line "Working tree clean. Nothing to commit."
+}
+
 @test "It prints a 'Nothing to commit' message in a clean repository" {
     run git_auto_commit
 
@@ -139,6 +156,28 @@ git_auto_commit() {
     assert_line "INPUT_FILE_PATTERN: ."
     assert_line "INPUT_COMMIT_OPTIONS: "
     assert_line "::debug::Apply commit options "
+}
+
+@test "It applies INPUT_ADD_OPTIONS when adding files" {
+    INPUT_FILE_PATTERN=""
+    INPUT_STATUS_OPTIONS="--untracked-files=no"
+    INPUT_ADD_OPTIONS="-u"
+
+    date > "${FAKE_LOCAL_REPOSITORY}"/remote-files1.txt
+    touch "${FAKE_LOCAL_REPOSITORY}"/new-file-{1,2}.php
+
+    run git_auto_commit
+
+    assert_success
+
+    assert_line "INPUT_STATUS_OPTIONS: --untracked-files=no"
+    assert_line "INPUT_ADD_OPTIONS: -u"
+    assert_line "INPUT_FILE_PATTERN: "
+    assert_line "::debug::Push commit to remote branch master"
+
+    # Assert that PHP files have not been added.
+    run git status
+    assert_output --partial 'new-file-1.php'
 }
 
 @test "It applies INPUT_FILE_PATTERN when creating commit" {
@@ -399,4 +438,39 @@ git_auto_commit() {
     remote_sha="$(git rev-parse --verify --short origin/a-new-branch)"
 
     assert_equal $current_sha $remote_sha
+}
+
+@test "It does not expand wildcard glob when using INPUT_PATTERN and INPUT_DISABLE_GLOBBING in git-status and git-add" {
+
+    # Create additional files in a nested directory structure
+    echo "Create Additional files";
+    touch "${FAKE_LOCAL_REPOSITORY}"/new-file-a.py
+    mkdir "${FAKE_LOCAL_REPOSITORY}"/nested
+    touch "${FAKE_LOCAL_REPOSITORY}"/nested/new-file-b.py
+
+    # Commit changes
+    echo "Commit changes before running git_auto_commit";
+    cd "${FAKE_LOCAL_REPOSITORY}";
+    git add . > /dev/null;
+    git commit --quiet -m "Init Remote Repository";
+    git push origin master > /dev/null;
+
+    # Make nested file dirty
+    echo "foo-bar" > "${FAKE_LOCAL_REPOSITORY}"/nested/new-file-b.py;
+
+    # ---
+
+    INPUT_FILE_PATTERN="*.py"
+    INPUT_DISABLE_GLOBBING=true
+
+    run git_auto_commit
+
+    assert_success
+
+    assert_line "INPUT_FILE_PATTERN: *.py"
+    assert_line "::debug::Push commit to remote branch master"
+
+    # Assert that the updated py file has been commited.
+    run git status
+    refute_output --partial 'nested/new-file-b.py'
 }

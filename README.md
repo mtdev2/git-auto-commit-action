@@ -7,11 +7,8 @@
     <img src="https://github.com/stefanzweifel/git-auto-commit-action/workflows/tests/badge.svg" alt="">
 </a>
 
-This GitHub Action automatically commits files which have been changed during a Workflow run and pushes the commit back to GitHub.  
+A GitHub Action to detect changed files during a Workflow run and to commit and push them back to the GitHub repository.
 By default, the commit is made in the name of "GitHub Actions" and co-authored by the user that made the last commit.
-
-This Action has been inspired and adapted from the [auto-commit](https://github.com/cds-snc/github-actions/tree/master/auto-commit
-)-Action of the Canadian Digital Service and this [commit](https://github.com/elstudio/actions-js-build/blob/41d604d6e73d632e22eac40df8cc69b5added04b/commit/entrypoint.sh)-Action by Eric Johnson.
 
 If you want to learn more how this Action works under the hood, check out [this article](https://michaelheap.com/git-auto-commit/) by Michael Heap.
 
@@ -23,22 +20,21 @@ Add the following step at the end of your job, after other steps that might add 
 - uses: stefanzweifel/git-auto-commit-action@v4
 ```
 
-
-This is a more extended example with all possible options.
+The following is an extended example with all possible options available for this Action.
 
 ```yaml
 - uses: stefanzweifel/git-auto-commit-action@v4
   with:
-    # Optional but recommended
+    # Optional, but recommended
     # Defaults to "Apply automatic changes"
-    commit_message: Apply automatic changes
+    commit_message: Automated Change
 
-    # Optional branch name where commit should be pushed to
-    # Defaults to the current branch
+    # Optional branch name where commit should be pushed to.
+    # Defaults to the current branch.
     branch: feature-123
 
-    # Optional options appended to `git-commit`
-    # See https://git-scm.com/docs/git-commit for a list of available options
+    # Optional. Used by `git-commit`.
+    # See https://git-scm.com/docs/git-commit#_options
     commit_options: '--no-verify --signoff'
 
     # Optional glob pattern of files which should be added to the commit
@@ -61,18 +57,32 @@ This is a more extended example with all possible options.
     # Action will create and push a new tag to the remote repository and the defined branch
     tagging_message: 'v1.0.0'
 
-    # Optional options appended to `git-push`
-    # See git-push documentation for details: https://git-scm.com/docs/git-push#_options
+    # Optional. Used by `git-status`
+    # See https://git-scm.com/docs/git-status#_options
+    status_options: '--untracked-files=no'
+
+    # Optional. Used by `git-add`
+    # See https://git-scm.com/docs/git-add#_options
+    add_options: '-u'
+
+    # Optional. Used by `git-push`
+    # See https://git-scm.com/docs/git-push#_options
     push_options: '--force'
     
-    # Optional: Disable dirty check and always try to create a commit and push
+    # Optional. Disable dirty check and always try to create a commit and push
     skip_dirty_check: true    
     
-    # Optional: Skip internal call to `git fetch`
-    skip_fetch: true
+    # Optional. Skip internal call to `git fetch`
+    skip_fetch: true    
+    
+    # Optional. Prevents the shell from expanding filenames. 
+    # Details: https://www.gnu.org/software/bash/manual/html_node/Filename-Expansion.html
+    disable_globbing: true
 ```
 
-## Example
+Please note that the Action depends on `bash`. If you're using the Action in a job in combination with a custom Docker container, make sure that `bash` is installed.
+
+## Example Workflow
 
 In this example, we're running `php-cs-fixer` in a PHP project to fix the codestyle automatically, then commit possible changed files back to the repository.
 
@@ -142,7 +152,7 @@ In non-`push` events, such as `pull_request`, make sure to specify the `ref` to 
 
 You have to do this to avoid that the `checkout`-Action clones your repository in a detached state.
 
-### Commits of this Action do not trigger new Workflow runs
+### Commits made by this Action do not trigger new Workflow runs
 
 The resulting commit **will not trigger** another GitHub Actions Workflow run.
 This is due to [limitations set by GitHub](https://help.github.com/en/actions/reference/events-that-trigger-workflows#triggering-new-workflows-using-a-personal-access-token).
@@ -210,7 +220,7 @@ Here's how the Pull Request will look like:
 ![Screenshot of a Pull Request from a Fork](https://user-images.githubusercontent.com/1080923/90955964-9c74c080-e482-11ea-8097-aa7f5161f50e.png)
 
 
-As you can see, your contributors have to go through hoops to make this work. **For Workflows which runter linters and fixers (like the example above) we recommend running them when a push happens on the `master`-branch.**
+As you can see, your contributors have to go through hoops to make this work. **For Workflows which run linters and fixers (like the example above) we recommend running them when a push happens on the `main`-branch.**
 
 
 For more information about running Actions on forks, see [this announcement from GitHub](https://github.blog/2020-08-03-github-actions-improvements-for-fork-and-pull-request-workflows/).
@@ -223,10 +233,46 @@ See [this announcement from GitHub](https://github.blog/2020-08-03-github-action
 
 ### Signing Commits & Other Git Command Line Options
 
-Using command lines options needs to be done manually for each workflow which you require the option enabled. So for example signing commits requires you to import the gpg signature each and every time. The following list of actions are worth checking out if you need to automate these tasks regulary
+Using command lines options needs to be done manually for each workflow which you require the option enabled. So for example signing commits requires you to import the gpg signature each and every time. The following list of actions are worth checking out if you need to automate these tasks regulary.
 
 - [Import GPG Signature](https://github.com/crazy-max/ghaction-import-gpg) (Suggested by [TGTGamer](https://github.com/tgtgamer))
 
+
+## Using `--amend` and `--no-edit` as commit options
+
+If you would like to use this Action to create a commit using [`--amend`](https://git-scm.com/docs/git-commit#Documentation/git-commit.txt---amend) and [`--no-edit`](https://git-scm.com/docs/git-commit#Documentation/git-commit.txt---no-edit) you need to make some adjustments.
+
+**☝️ Important Notice:** You should understand the implications of rewriting history if you amend a commit that has already been published. [See rebasing](https://git-scm.com/docs/git-rebase#_recovering_from_upstream_rebase)
+
+First, you need to extract the previous commit message by using `git log -1 --pretty=%s`.
+Then you need to provide this last commit message to the Action through the `commit_message` input option.
+
+Finally, you have to use `push_options: '--force'` to overwrite the git history on the GitHub remote repository. (git-auto-commit will not do a `git-rebase` for you!)
+
+The steps in your workflow might look like this:
+
+```yaml
+- uses: actions/checkout@master
+  with:
+    # Fetch the last 2 commits instead of just 1. (Fetching just 1 commit would overwrite the whole history)
+    fetch-depth: 2
+
+# Other steps in your workflow to trigger a changed file
+
+- name: Get last commit message
+  id: last-commit-message
+  run: |
+    echo "::set-output name=msg::$(git log -1 --pretty=%s)"
+
+- uses: stefanzweifel/git-auto-commit-action@v4
+  with:
+    commit_message: ${{ steps.last-commit-message.outputs.msg }}
+    commit_options: '--amend --no-edit'
+    push_options: '--force'
+    skip_fetch: true
+```
+
+See discussion in [#159](https://github.com/stefanzweifel/git-auto-commit-action/issues/159#issuecomment-845347950) for details.
 
 ## Troubleshooting
 ### Action does not push commit to repository
@@ -242,18 +288,9 @@ Updating the `token` value with a Personal Access Token should fix your issues.
 
 ### Push to protected branches
 
-If your repository uses [protected branches](https://help.github.com/en/github/administering-a-repository/configuring-protected-branches) you have to do the following changes to your Workflow for the Action to work properly.
+If your repository uses [protected branches](https://help.github.com/en/github/administering-a-repository/configuring-protected-branches) you have to make some changes to your Workflow for the Action to work properly: You need a Personal Access Token and you either have to allow force pushes or the Personal Acess Token needs to belong to an Administrator.
 
-You have to enable force pushes to a protected branch (See [documentation](https://help.github.com/en/github/administering-a-repository/enabling-force-pushes-to-a-protected-branch)) and update your Workflow to use force push like this.
-
-```yaml
-    - uses: stefanzweifel/git-auto-commit-action@v4
-      with:
-        commit_message: Apply php-cs-fixer changes
-        push_options: --force
-```
-
-In addition, you have to create a new [Personal Access Token (PAT)](https://github.com/settings/tokens/new),
+First, you have to create a new [Personal Access Token (PAT)](https://github.com/settings/tokens/new),
 store the token as a secret in your repository and pass the new token to the [`actions/checkout`](https://github.com/actions/checkout#usage) Action step.
 
 ```yaml
@@ -263,7 +300,17 @@ store the token as a secret in your repository and pass the new token to the [`a
 ```
 You can learn more about Personal Access Token in the [GitHub documentation](https://docs.github.com/en/github/authenticating-to-github/creating-a-personal-access-token).
 
-Note: If you're working in an organisation and you don't want to create the PAT from your personal account, we recommend using a bot-account for such tokens.
+**Note:** If you're working in an organisation and you don't want to create the PAT from your personal account, we recommend using a bot-account for such tokens.
+
+
+If you go the "force pushes" route, you have to enable force pushes to a protected branch (See [documentation](https://help.github.com/en/github/administering-a-repository/enabling-force-pushes-to-a-protected-branch)) and update your Workflow to use force push like this.
+
+```yaml
+    - uses: stefanzweifel/git-auto-commit-action@v4
+      with:
+        commit_message: Apply php-cs-fixer changes
+        push_options: --force
+```
 
 ### No new workflows are triggered by the commit of this action
 
@@ -291,6 +338,14 @@ We use [SemVer](http://semver.org/) for versioning. For the versions available, 
 
 We also provide major version tags to make it easier to always use the latest release of a major version. For example you can use `stefanzweifel/git-auto-commit-action@v4` to always use the latest release of the current major version.
 (More information about this [here](https://help.github.com/en/actions/building-actions/about-actions#versioning-your-action).)
+
+## Credits
+
+* [Stefan Zweifel](https://github.com/stefanzweifel)
+* [All Contributors](https://github.com/stefanzweifel/git-auto-commit-action/graphs/contributors)
+
+This Action has been inspired and adapted from the [auto-commit](https://github.com/cds-snc/github-actions/tree/master/auto-commit
+)-Action of the Canadian Digital Service and this [commit](https://github.com/elstudio/actions-js-build/blob/41d604d6e73d632e22eac40df8cc69b5added04b/commit/entrypoint.sh)-Action by Eric Johnson.
 
 ## License
 
