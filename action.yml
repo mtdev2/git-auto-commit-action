@@ -1,7 +1,7 @@
 name: Git Auto Commit
 description: 'Automatically commits files which have been changed during the workflow run and push changes back to remote repository.'
 
-author: Stefan Zweifel <hello@stefanzweifel.io>
+author: Stefan Zweifel <stefan@stefanzweifel.dev>
 
 inputs:
   commit_message:
@@ -16,28 +16,40 @@ inputs:
     description: Commit options (eg. --no-verify)
     required: false
     default: ''
+  add_options:
+    description: Add options (eg. -u)
+    required: false
+    default: ''
+  status_options:
+    description: Status options (eg. --untracked-files=no)
+    required: false
+    default: ''
   file_pattern:
-    description: File pattern used for `git add`. For example `src/\*.js`
+    description: File pattern used for `git add` and the dirty-check (`git status`). Supports multiple space-separated patterns. For example `src/*.js`
     required: false
     default: '.'
   repository:
-    description: Local file path to the git repository. Defaults to the current directory (`.`)
+    description: Relative file path under $GITHUB_WORKSPACE to the git repository. Defaults to the current directory (`.`)
     required: false
     default: '.'
   commit_user_name:
     description: Name used for the commit user
     required: false
-    default: GitHub Actions
+    default: github-actions[bot]
   commit_user_email:
     description: Email address used for the commit user
     required: false
-    default: actions@github.com
+    default: 41898282+github-actions[bot]@users.noreply.github.com
   commit_author:
     description: Value used for the commit author. Defaults to the username of whoever triggered this workflow run.
     required: false
-    default: ${{ github.actor }} <${{ github.actor }}@users.noreply.github.com>
+    default: ${{ github.actor }} <${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com>
+  tag_name:
+    description: Tag name used for creating a new git tag with the commit. Keep this empty, if no tag should be created.
+    required: false
+    default: ''
   tagging_message:
-    description: Message used to create a new git tag with the commit. Keep this empty, if no tag should be created.
+    description: Tagging message used for creating a new git tag with the commit. Keep this empty, if no tag should be created.
     required: false
     default: ''
   push_options:
@@ -52,13 +64,78 @@ inputs:
     description: Skip the call to git-fetch.
     required: false
     default: false
+  skip_checkout:
+    description: Skip the call to git-checkout.
+    required: false
+    default: false
+  skip_push:
+    description: Skip the call to git-push.
+    required: false
+    default: false
+  disable_globbing:
+    description: Stop the shell from expanding filenames (https://www.gnu.org/software/bash/manual/html_node/Filename-Expansion.html)
+    required: false
+    default: false
+  create_branch:
+    description: Create new branch with the name of `branch`-input in local and remote repository, if it doesn't exist yet.
+    required: false
+    default: false
+  create_git_tag_only:
+    description: Perform a clean git tag and push, without commiting anything
+    required: false
+    default: false
+  before_add_hook:
+    description: Shell snippet to run before `git add`.
+    required: false
+    default: ''
+  after_add_hook:
+    description: Shell snippet to run after `git add`.
+    required: false
+    default: ''
+  before_commit_hook:
+    description: Shell snippet to run before `git commit`.
+    required: false
+    default: ''
+  after_commit_hook:
+    description: Shell snippet to run after `git commit`.
+    required: false
+    default: ''
+  before_tag_hook:
+    description: Shell snippet to run before `git tag` is created.
+    required: false
+    default: ''
+  after_tag_hook:
+    description: Shell snippet to run after `git tag` is created.
+    required: false
+    default: ''
+  before_push_hook:
+    description: Shell snippet to run before `git push`.
+    required: false
+    default: ''
+  after_push_hook:
+    description: Shell snippet to run after `git push`.
+    required: false
+    default: ''
+  disable_pull_request_target_trigger_warning:
+    description: Suppress the security warning emitted when the action runs on a `pull_request_target` event.
+    required: false
+    default: false
+  internal_git_binary:
+    description: Internal use only! Path to git binary used to check if git is available. (Don't change this!)
+    required: false
+    default: git
+
 
 outputs:
   changes_detected:
-    description: Value is "true", if the repository was dirty and file changes have been detected. Value is "false", if no changes have been detected.
+    description: Value is "true" if matching changes were detected and committed. Value is "false" if no matching changes were detected or only CRLF changes were staged. Not set in `create_git_tag_only` mode.
+  commit_hash:
+    description: Full hash of the created commit. Only set when a commit was actually made (i.e. `changes_detected` is "true").
+  create_git_tag_only:
+    description: Set to "true" when the action ran in `create_git_tag_only` mode. Never set to "false".
 
 runs:
-  using: 'node12'
+  using: 'node24'
   main: 'index.js'
 
 branding:
